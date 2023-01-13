@@ -1,51 +1,38 @@
-use error::Res;
-use std::io;
-use std::process;
-use std::io::{BufRead, Lines, Write};
+use std::io::{BufRead, Error, Lines, Write};
 
-mod error;
-
-fn read_first_line<R: BufRead>(lines: &mut Lines<R>) -> Res<Vec<String>> {
-    let mut mat = Vec::<String>::new();
-    let first_ln = lines.next().ok_or("No lines")?;
-    first_ln?.split(',').for_each(|rec| {
-        mat.push(rec.to_string());
-    });
-    Ok(mat)
+fn read_first_line<R: BufRead>(lines: &mut Lines<R>) -> Result<Vec<String>, Error> {
+    let first_ln = lines.next().unwrap_or(Ok(String::new()))?;
+    Ok(first_ln.split(',').map(|rec| rec.to_string()).collect())
 }
 
-fn add_line(ln: String, mat: &mut Vec<String>) {
-    mat.iter_mut()
-        .zip(&mut ln.split(','))
-        .for_each(|(row, rec)| {
-            row.push(',');
-            row.push_str(rec);
-        })
+fn add_line(mat: &mut Vec<String>, ln: String) {
+    mat.iter_mut().zip(ln.split(',')).for_each(|(row, rec)| {
+        row.push(',');
+        *row += rec;
+    })
 }
 
-fn read_lines<R: BufRead>(hndl: &mut Lines<R>, mat: &mut Vec<String>) -> Res<()> {
-    hndl.try_for_each(|ln| Ok(add_line(ln?, mat)))
+fn read_lines<R: BufRead>(lines: &mut Lines<R>, mat: &mut Vec<String>) -> Result<(), Error> {
+    lines.try_for_each(|ln| Ok(add_line(mat, ln?)))
 }
 
-fn write_lines<W: Write>(hndl: &mut W, mat: Vec<String>) -> Res<()> {
+fn write_lines<W: Write>(hndl: &mut W, mat: &mut Vec<String>) -> Result<(), Error> {
     mat.into_iter()
         .try_for_each(|ln| Ok(writeln!(hndl, "{}", ln)?))
 }
 
-fn read_and_write(stdin: &io::Stdin, stdout: &mut io::Stdout) -> Res<()> {
-    let mut lines = stdin.lock().lines();
+fn read_and_write() -> Result<(), Error> {
+    let lines = &mut std::io::stdin().lock().lines();
+    let mat = &mut read_first_line(lines)?;
 
-    let mut mat = read_first_line(&mut lines)?;
-    read_lines(&mut lines, &mut mat)?;
-    write_lines(stdout, mat)?;
+    read_lines(lines, mat)?;
+    write_lines(&mut std::io::stdout(), mat)?;
     Ok(())
 }
 
 fn main() {
-    let stdin = io::stdin();
-    let mut stdout = io::stdout();
-    read_and_write(&stdin, &mut stdout).unwrap_or_else(|e| {
+    read_and_write().unwrap_or_else(|e| {
         eprintln!("{}", e);
-        process::exit(1);
+        std::process::exit(1);
     });
 }
